@@ -16,12 +16,12 @@
 
 package com.example.android.pictureinpicture.viewmodel
 
-import android.os.SystemClock
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.map
 import androidx.lifecycle.viewModelScope
+import com.example.android.pictureinpicture.interfaces.TimeProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,11 +30,11 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class MainViewModel: ViewModel() {
+class MainViewModel(private val timeProvider: TimeProvider): ViewModel() {
 
     private var job: Job? = null
 
-    private var startUptimeMillis = SystemClock.uptimeMillis()
+    private var startUptimeMillis = timeProvider.uptimeMillis()
     private val timeMillis = MutableLiveData(0L)
 
     private val _started = MutableLiveData(false)
@@ -64,9 +64,9 @@ class MainViewModel: ViewModel() {
     }
 
     private suspend fun CoroutineScope.start() {
-        startUptimeMillis = SystemClock.uptimeMillis() - (timeMillis.value ?: 0L)
+        startUptimeMillis = timeProvider.uptimeMillis() - (timeMillis.value ?: 0L)
         while (isActive) {
-            val elapsedTime = SystemClock.uptimeMillis() - startUptimeMillis
+            val elapsedTime = timeProvider.uptimeMillis() - startUptimeMillis
             withContext(Dispatchers.Main) {
                 timeMillis.value = elapsedTime
             }
@@ -79,7 +79,7 @@ class MainViewModel: ViewModel() {
      * Clears the stopwatch to 00:00:00.
      */
     fun clear() {
-        startUptimeMillis = SystemClock.uptimeMillis()
+        startUptimeMillis = timeProvider.uptimeMillis()
         timeMillis.value = 0L
     }
 
