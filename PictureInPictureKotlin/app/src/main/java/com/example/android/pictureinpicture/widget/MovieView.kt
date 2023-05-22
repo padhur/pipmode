@@ -19,6 +19,7 @@ package com.example.android.pictureinpicture.widget
 import android.content.Context
 import android.graphics.Color
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
@@ -34,6 +35,7 @@ import android.widget.ImageButton
 import android.widget.RelativeLayout
 import androidx.annotation.RawRes
 import com.example.android.pictureinpicture.R
+import com.example.android.pictureinpicture.AndroidSystemUtils
 import java.io.IOException
 import java.lang.ref.WeakReference
 
@@ -44,9 +46,9 @@ import java.lang.ref.WeakReference
  * (play/pause, fast forward, and fast rewind).
  */
 class MovieView @JvmOverloads constructor(
-        context: Context,
-        attrs: AttributeSet? = null,
-        defStyleAttr: Int = 0
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
 ) : RelativeLayout(context, attrs, defStyleAttr) {
 
     companion object {
@@ -125,7 +127,7 @@ class MovieView @JvmOverloads constructor(
 
         // Attributes
         val a = context.obtainStyledAttributes(attrs, R.styleable.MovieView,
-                defStyleAttr, R.style.Widget_PictureInPicture_MovieView)
+            defStyleAttr, R.style.Widget_PictureInPicture_MovieView)
         setVideoResourceId(a.getResourceId(R.styleable.MovieView_android_src, 0))
         setAdjustViewBounds(a.getBoolean(R.styleable.MovieView_android_adjustViewBounds, false))
         title = a.getString(R.styleable.MovieView_android_title) ?: ""
@@ -149,7 +151,7 @@ class MovieView @JvmOverloads constructor(
                     handler.removeMessages(TimeoutHandler.MESSAGE_HIDE_CONTROLS)
                     if (player.isPlaying) {
                         handler.sendEmptyMessageDelayed(TimeoutHandler.MESSAGE_HIDE_CONTROLS,
-                                TIMEOUT_CONTROLS)
+                            TIMEOUT_CONTROLS)
                     }
                 }
             }
@@ -190,18 +192,18 @@ class MovieView @JvmOverloads constructor(
                 val heightMode = MeasureSpec.getMode(heightMeasureSpec)
                 if (adjustViewBounds) {
                     if (widthMode == MeasureSpec.EXACTLY
-                            && heightMode != MeasureSpec.EXACTLY) {
+                        && heightMode != MeasureSpec.EXACTLY) {
                         super.onMeasure(widthMeasureSpec,
-                                MeasureSpec.makeMeasureSpec((width * aspectRatio).toInt(),
-                                        MeasureSpec.EXACTLY))
+                            MeasureSpec.makeMeasureSpec((width * aspectRatio).toInt(),
+                                MeasureSpec.EXACTLY))
                     } else if (widthMode != MeasureSpec.EXACTLY
-                            && heightMode == MeasureSpec.EXACTLY) {
+                        && heightMode == MeasureSpec.EXACTLY) {
                         super.onMeasure(MeasureSpec.makeMeasureSpec((height / aspectRatio).toInt(),
-                                MeasureSpec.EXACTLY), heightMeasureSpec)
+                            MeasureSpec.EXACTLY), heightMeasureSpec)
                     } else {
                         super.onMeasure(widthMeasureSpec,
-                                MeasureSpec.makeMeasureSpec((width * aspectRatio).toInt(),
-                                        MeasureSpec.EXACTLY))
+                            MeasureSpec.makeMeasureSpec((width * aspectRatio).toInt(),
+                                MeasureSpec.EXACTLY))
                     }
                 } else {
                     val viewRatio = height.toFloat() / width
@@ -281,7 +283,8 @@ class MovieView @JvmOverloads constructor(
         toggle.visibility = View.VISIBLE
         fastForward.visibility = View.VISIBLE
         fastRewind.visibility = View.VISIBLE
-        minimize.visibility = View.VISIBLE
+        minimize.visibility =
+            if (AndroidSystemUtils.isPIPModeSupported()) View.VISIBLE else View.INVISIBLE
     }
 
     /**
@@ -360,8 +363,10 @@ class MovieView @JvmOverloads constructor(
         mediaPlayer?.let { player ->
             player.reset()
             try {
-                resources.openRawResourceFd(videoResourceId).use { fd ->
-                    player.setDataSource(fd)
+                resources.openRawResourceFd(videoResourceId).use {
+                    val resourceName = resources.getResourceEntryName(videoResourceId)
+                    val videoFilePath = Uri.parse("android.resource://" + context.packageName + "/raw/" + resourceName)
+                    player.setDataSource(context, videoFilePath)
                     player.setOnPreparedListener { mediaPlayer ->
                         // Adjust the aspect ratio of this view
                         requestLayout()

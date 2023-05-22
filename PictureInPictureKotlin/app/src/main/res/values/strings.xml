@@ -45,4 +45,6 @@
     ]]></string>
     <string name="switch_custom">Switch to custom actions example</string>
     <string name="title_bigbuckbunny">Big Buck Bunny</string>
+    <string name="pip_unsupported">Please upgrade your device OS version to 8 and above to use this feature.</string>
+    <string name="upgrade">Upgrade</string>
 </resources>
