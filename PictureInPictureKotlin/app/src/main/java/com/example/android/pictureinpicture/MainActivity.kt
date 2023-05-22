@@ -37,10 +37,14 @@ import androidx.annotation.RequiresApi
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.android.pictureinpicture.databinding.MainActivityBinding
 import com.example.android.pictureinpicture.extensions.customConfig
+import com.example.android.pictureinpicture.interfaces.SystemTimeProvider
+import com.example.android.pictureinpicture.viewmodel.MainViewModel
+import com.example.android.pictureinpicture.viewmodel.MainViewModelFactory
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -61,7 +65,7 @@ private const val REQUEST_START_OR_PAUSE = 4
  */
 class MainActivity : AppCompatActivity() {
 
-    private val viewModel: MainViewModel by viewModels()
+    private lateinit var viewModel: MainViewModel
     private lateinit var binding: MainActivityBinding
 
     /**
@@ -87,6 +91,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = MainActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        val timeProvider = SystemTimeProvider()
+        viewModel = ViewModelProvider(
+            this,
+            MainViewModelFactory(timeProvider)
+        ).get(MainViewModel::class.java)
         // Event handlers
         binding.clear.setOnClickListener { viewModel.clear() }
         binding.startOrPause.setOnClickListener { viewModel.startOrPause() }
@@ -99,7 +108,13 @@ class MainActivity : AppCompatActivity() {
                     resources.getString(R.string.pip_unsupported),
                     Snackbar.LENGTH_LONG
                 )
-                    .setAction(resources.getString(R.string.upgrade)) { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+                    .setAction(resources.getString(R.string.upgrade)) {
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_SETTINGS
+                            )
+                        )
+                    }
                     .apply {
                         customConfig(context)
                     }
@@ -116,7 +131,7 @@ class MainActivity : AppCompatActivity() {
             binding.startOrPause.setImageResource(
                 if (started) R.drawable.ic_pause_24dp else R.drawable.ic_play_arrow_24dp
             )
-            if(AndroidSystemUtils.isPIPModeSupported()) {
+            if (AndroidSystemUtils.isPIPModeSupported()) {
                 updatePictureInPictureParams(started)
             }
         }
@@ -125,7 +140,7 @@ class MainActivity : AppCompatActivity() {
         // See https://android.devsite.corp.google.com/develop/ui/views/picture-in-picture#smoother-transition
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                if(AndroidSystemUtils.isPIPModeSupported()) {
+                if (AndroidSystemUtils.isPIPModeSupported()) {
                     trackPipAnimationHintView(binding.stopwatchBackground)
                 }
             }
