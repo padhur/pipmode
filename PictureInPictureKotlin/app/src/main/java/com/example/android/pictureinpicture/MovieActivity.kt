@@ -20,7 +20,9 @@ import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.os.Build.VERSION_CODES
 import android.os.Bundle
+import android.provider.Settings
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaControllerCompat
 import android.support.v4.media.session.MediaSessionCompat
@@ -28,13 +30,16 @@ import android.support.v4.media.session.PlaybackStateCompat
 import android.text.util.Linkify
 import android.util.Rational
 import android.view.View
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.doOnLayout
 import com.example.android.pictureinpicture.databinding.MovieActivityBinding
+import com.example.android.pictureinpicture.extensions.customConfig
 import com.example.android.pictureinpicture.widget.MovieView
+import com.google.android.material.snackbar.Snackbar
 
 /**
  * Demonstrates usage of Picture-in-Picture when using [MediaSessionCompat].
@@ -87,19 +92,37 @@ class MovieActivity : AppCompatActivity() {
             )
         }
 
+        @RequiresApi(VERSION_CODES.O)
         override fun onMovieMinimized() {
             // The MovieView wants us to minimize it. We enter Picture-in-Picture mode now.
             minimize()
         }
     }
 
+    @RequiresApi(VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = MovieActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         Linkify.addLinks(binding.explanation, Linkify.ALL)
-        binding.pip.setOnClickListener { minimize() }
+        binding.pip.setOnClickListener {
+            if (AndroidSystemUtils.isPIPModeSupported()) {
+                minimize()
+            } else {
+                Snackbar.make(
+                    binding.root,
+                    resources.getString(R.string.pip_unsupported),
+                    Snackbar.LENGTH_LONG
+                )
+                    .setAction(resources.getString(R.string.upgrade)) { startActivity(Intent(Settings.ACTION_SETTINGS)) }
+                    .apply {
+                        customConfig(context)
+                    }
+                    .show()
+            }
+        }
+
         binding.switchExample.setOnClickListener {
             startActivity(Intent(this@MovieActivity, MainActivity::class.java))
             finish()
@@ -107,7 +130,11 @@ class MovieActivity : AppCompatActivity() {
 
         // Configure parameters for the picture-in-picture mode. We do this at the first layout of
         // the MovieView because we use its layout position and size.
-        binding.movie.doOnLayout { updatePictureInPictureParams() }
+        binding.movie.doOnLayout {
+            if(AndroidSystemUtils.isPIPModeSupported()) {
+                updatePictureInPictureParams()
+            }
+        }
 
         // Set up the video; it automatically starts.
         binding.movie.setMovieListener(movieListener)
@@ -151,6 +178,7 @@ class MovieActivity : AppCompatActivity() {
         session.release()
     }
 
+    @RequiresApi(VERSION_CODES.N)
     override fun onRestart() {
         super.onRestart()
         if (!isInPictureInPictureMode) {
@@ -171,6 +199,7 @@ class MovieActivity : AppCompatActivity() {
         }
     }
 
+    @RequiresApi(VERSION_CODES.O)
     override fun onPictureInPictureModeChanged(
         isInPictureInPictureMode: Boolean, newConfig: Configuration
     ) {
@@ -186,6 +215,7 @@ class MovieActivity : AppCompatActivity() {
         }
     }
 
+    @RequiresApi(VERSION_CODES.O)
     private fun updatePictureInPictureParams(): PictureInPictureParams {
         // Calculate the aspect ratio of the PiP screen.
         val aspectRatio = Rational(binding.movie.width, binding.movie.height)
@@ -196,10 +226,13 @@ class MovieActivity : AppCompatActivity() {
             .setAspectRatio(aspectRatio)
             // Specify the portion of the screen that turns into the picture-in-picture mode.
             // This makes the transition animation smoother.
-            .setSourceRectHint(visibleRect)
-            // The screen automatically turns into the picture-in-picture mode when it is hidden
-            // by the "Home" button.
-            .setAutoEnterEnabled(true)
+            .setSourceRectHint(visibleRect).apply {
+                // The screen automatically turns into the picture-in-picture mode when it is hidden
+                // by the "Home" button.
+                if(AndroidSystemUtils.isEnhancedPIPFeatureSupported()) {
+                    setAutoEnterEnabled(true)
+                }
+            }
             .build()
         setPictureInPictureParams(params)
         return params
@@ -208,6 +241,7 @@ class MovieActivity : AppCompatActivity() {
     /**
      * Enters Picture-in-Picture mode.
      */
+    @RequiresApi(VERSION_CODES.O)
     private fun minimize() {
         enterPictureInPictureMode(updatePictureInPictureParams())
     }
