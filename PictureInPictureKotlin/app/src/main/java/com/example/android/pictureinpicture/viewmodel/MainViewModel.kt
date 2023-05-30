@@ -90,6 +90,7 @@ class MainViewModel(private val timeProvider: TimeProvider): ViewModel() {
     }
 
     companion object {
+        // update
         private const val UPDATE_INTERVAL_MS = 10L
     }
 }
