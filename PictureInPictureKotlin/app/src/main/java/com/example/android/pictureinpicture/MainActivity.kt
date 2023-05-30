@@ -25,18 +25,28 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.drawable.Icon
+import android.os.Build.VERSION_CODES
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Rational
 import android.view.View
 import androidx.activity.trackPipAnimationHintView
 import androidx.activity.viewModels
 import androidx.annotation.DrawableRes
+import androidx.annotation.RequiresApi
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.android.pictureinpicture.databinding.MainActivityBinding
+import com.example.android.pictureinpicture.extensions.customConfig
+import com.example.android.pictureinpicture.interfaces.SystemTimeProvider
+import com.example.android.pictureinpicture.viewmodel.MainViewModel
+import com.example.android.pictureinpicture.viewmodel.MainViewModelFactory
+import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 
 /** Intent action for stopwatch controls from Picture-in-Picture mode.  */
@@ -55,7 +65,7 @@ private const val REQUEST_START_OR_PAUSE = 4
  */
 class MainActivity : AppCompatActivity() {
 
-    private val viewModel: MainViewModel by viewModels()
+    private lateinit var viewModel: MainViewModel
     private lateinit var binding: MainActivityBinding
 
     /**
@@ -75,15 +85,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @RequiresApi(VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = MainActivityBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        val timeProvider = SystemTimeProvider()
+        viewModel = ViewModelProvider(
+            this,
+            MainViewModelFactory(timeProvider)
+        ).get(MainViewModel::class.java)
         // Event handlers
         binding.clear.setOnClickListener { viewModel.clear() }
         binding.startOrPause.setOnClickListener { viewModel.startOrPause() }
         binding.pip.setOnClickListener {
-            enterPictureInPictureMode(updatePictureInPictureParams(viewModel.started.value == true))
+            if (AndroidSystemUtils.isPIPModeSupported()) {
+                enterPictureInPictureMode(updatePictureInPictureParams(viewModel.started.value == true))
+            } else {
+                Snackbar.make(
+                    binding.root,
+                    resources.getString(R.string.pip_unsupported),
+                    Snackbar.LENGTH_LONG
+                )
+                    .setAction(resources.getString(R.string.upgrade)) {
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_SETTINGS
+                            )
+                        )
+                    }
+                    .apply {
+                        customConfig(context)
+                    }
+                    .show()
+            }
         }
         binding.switchExample.setOnClickListener {
             startActivity(Intent(this@MainActivity, MovieActivity::class.java))
@@ -95,14 +131,18 @@ class MainActivity : AppCompatActivity() {
             binding.startOrPause.setImageResource(
                 if (started) R.drawable.ic_pause_24dp else R.drawable.ic_play_arrow_24dp
             )
-            updatePictureInPictureParams(started)
+            if (AndroidSystemUtils.isPIPModeSupported()) {
+                updatePictureInPictureParams(started)
+            }
         }
 
         // Use trackPipAnimationHint view to make a smooth enter/exit pip transition.
         // See https://android.devsite.corp.google.com/develop/ui/views/picture-in-picture#smoother-transition
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                trackPipAnimationHintView(binding.stopwatchBackground)
+                if (AndroidSystemUtils.isPIPModeSupported()) {
+                    trackPipAnimationHintView(binding.stopwatchBackground)
+                }
             }
         }
 
@@ -111,6 +151,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // This is called when the activity gets into or out of the picture-in-picture mode.
+    @RequiresApi(VERSION_CODES.O)
     override fun onPictureInPictureModeChanged(
         isInPictureInPictureMode: Boolean,
         newConfig: Configuration
@@ -131,6 +172,7 @@ class MainActivity : AppCompatActivity() {
      * Updates the parameters of the picture-in-picture mode for this activity based on the current
      * [started] state of the stopwatch.
      */
+    @RequiresApi(VERSION_CODES.O)
     private fun updatePictureInPictureParams(started: Boolean): PictureInPictureParams {
         val params = PictureInPictureParams.Builder()
             // Set action items for the picture-in-picture mode. These are the only custom controls
@@ -164,14 +206,17 @@ class MainActivity : AppCompatActivity() {
                 )
             )
             // Set the aspect ratio of the picture-in-picture mode.
-            .setAspectRatio(Rational(16, 9))
-            // Turn the screen into the picture-in-picture mode if it's hidden by the "Home" button.
-            .setAutoEnterEnabled(true)
-            // Disables the seamless resize. The seamless resize works great for videos where the
-            // content can be arbitrarily scaled, but you can disable this for non-video content so
-            // that the picture-in-picture mode is resized with a cross fade animation.
-            .setSeamlessResizeEnabled(false)
-            .build()
+            .setAspectRatio(Rational(16, 9)).apply {
+                if (AndroidSystemUtils.isEnhancedPIPFeatureSupported()) {
+                    // Turn the screen into the picture-in-picture mode if it's hidden by the "Home" button.
+                    setAutoEnterEnabled(true)
+                    // Disables the seamless resize. The seamless resize works great for videos where the
+                    // content can be arbitrarily scaled, but you can disable this for non-video content so
+                    // that the picture-in-picture mode is resized with a cross fade animation.
+                    setSeamlessResizeEnabled(false)
+                }
+            }.build()
+
         setPictureInPictureParams(params)
         return params
     }
@@ -180,6 +225,7 @@ class MainActivity : AppCompatActivity() {
      * Creates a [RemoteAction]. It is used as an action icon on the overlay of the
      * picture-in-picture mode.
      */
+    @RequiresApi(VERSION_CODES.O)
     private fun createRemoteAction(
         @DrawableRes iconResId: Int,
         @StringRes titleResId: Int,
